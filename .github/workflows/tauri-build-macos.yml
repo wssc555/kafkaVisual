@@ -1,28 +1,20 @@
-# macOS(Apple Silicon)安装包每日构建(dmg)。
+# macOS(Apple Silicon)安装包手动构建(dmg)。
 #
-# 触发:
-#   1. workflow_dispatch —— Actions 页手动 Run(云端测试);
-#   2. schedule —— 每天 UTC 20:31(北京时间 04:31)自动跑,产物做每日快照;
-#   3. push tag v* —— 自动发布到 GitHub Releases（draft: false，无需手动 Publish）。
-#
-# 注意: schedule 只对「默认分支」上的本文件生效;仓库 60 天无活动后 GitHub 会自动停用定时。
+# 触发: workflow_dispatch —— 仅 Actions 页手动 Run;
+#   在 Actions 页选择某个 v* tag 运行时，会额外发布到 GitHub Releases（draft: false，无需手动 Publish）。
 # 已按要求去掉 Intel(x86_64-apple-darwin)平台:仅出 arm64 dmg,
 # 覆盖 Apple Silicon 全系(2020 年后的 Mac)。
 name: Tauri Build (macOS)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '31 20 * * *'
-  push:
-    tags: ['v*']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: write # tag 触发时向 release 上传文件
+  contents: write # 选 v* tag 手动运行时向 release 上传文件
   actions: write # 删除上一次运行的同名 artifact（滚动覆盖）
 
 env:
@@ -36,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # upload-artifact@v4 没有跨 run 的「覆盖」：同名 artifact 按运行各存一份，
-      # 每日定时构建会把免费账户 500MB 制品存储配额涨满（"Artifact storage quota has been hit"）。
+      # 反复构建会把免费账户 500MB 制品存储配额涨满（"Artifact storage quota has been hit"）。
       # 构建前删掉上一次运行的同名 artifact —— 仓库里每平台始终只保留最新一份（等效滚动覆盖）。
       # 需要 permissions.actions: write；首次运行无可删对象为空集，正常通过。
       # retention-days 保留 14 天，仅作本步骤意外失败时的兜底。
@@ -136,7 +128,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish release (tag push only)
+      - name: Publish release (manual run on v* tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:

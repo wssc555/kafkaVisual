@@ -1,12 +1,8 @@
-# Windows 安装包每日构建(msi + NSIS exe)。
+# Windows 安装包手动构建(msi + NSIS exe)。
 name: Tauri Build (Windows)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '3 20 * * *'
-  push:
-    tags: ['v*']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -34,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # upload-artifact@v4 没有跨 run 的「覆盖」：同名 artifact 按运行各存一份，
-      # 每日定时构建会把免费账户 500MB 制品存储配额涨满（"Artifact storage quota has been hit"）。
+      # 反复构建会把免费账户 500MB 制品存储配额涨满（"Artifact storage quota has been hit"）。
       # 构建前删掉上一次运行的同名 artifact —— 仓库里每平台始终只保留最新一份（等效滚动覆盖）。
       # 需要 permissions.actions: write；首次运行无可删对象为空集，正常通过。
       # retention-days 保留 14 天，仅作本步骤意外失败时的兜底。
@@ -145,7 +141,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish release (tag push only)
+      - name: Publish release (manual run on v* tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
