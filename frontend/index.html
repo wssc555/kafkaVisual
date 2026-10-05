@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kafka Visualizer</title>
+    <style>
+      /*
+        启动画面(纯 CSS,零 JS 依赖):桌面模式下 Vue 挂载前要等 sidecar 握手
+        (Spring Boot 启动 5–30s),这段等待期此前表现为纯白屏,无法区分
+        「正在启动」和「启动失败」。#app 为空时显示加载动画,Vue 挂载后
+        div 非空,:empty 选择器自动失效,无需任何手动清理。
+      */
+      #app:empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+      }
+      #app:empty::after {
+        content: '';
+        width: 36px;
+        height: 36px;
+        border: 3px solid #dcdfe6;
+        border-top-color: #409eff;
+        border-radius: 50%;
+        animation: boot-spin 0.9s linear infinite;
+      }
+      @keyframes boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

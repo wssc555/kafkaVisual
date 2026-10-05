@@ -1,0 +1,157 @@
+# Windows 安装包每日构建(msi + NSIS exe)。
+name: Tauri Build (Windows)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '3 20 * * *'
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  actions: write # 删除上一次运行的同名 artifact（滚动覆盖）
+
+env:
+  CARGO_INCREMENTAL: 0 # 关闭 Rust 增量编译，减小缓存体积并加速 CI 链接
+
+jobs:
+  build-tauri-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      # 优化 1: 禁用 Windows Defender 实时扫描，大幅提高磁盘 I/O 速度。
+      # 部分 runner 镜像会拒绝该设置——失败不应挡住构建，故 continue-on-error。
+      - name: Disable Windows Defender Realtime Monitoring
+        shell: pwsh
+        continue-on-error: true
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
+      - uses: actions/checkout@v4
+
+      # upload-artifact@v4 没有跨 run 的「覆盖」：同名 artifact 按运行各存一份，
+      # 每日定时构建会把免费账户 500MB 制品存储配额涨满（"Artifact storage quota has been hit"）。
+      # 构建前删掉上一次运行的同名 artifact —— 仓库里每平台始终只保留最新一份（等效滚动覆盖）。
+      # 需要 permissions.actions: write；首次运行无可删对象为空集，正常通过。
+      # retention-days 保留 14 天，仅作本步骤意外失败时的兜底。
+      - name: Delete previous artifact (rolling overwrite)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ids=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" --paginate \
+            -q '.artifacts[] | select(.name == "kafka-visualizer-windows-x64" and .expired == false) | .id')
+          if [ -z "$ids" ]; then
+            echo "no previous artifact, nothing to delete"
+          else
+            for id in $ids; do
+              gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+              echo "deleted artifact $id"
+            done
+          fi
+
+      # 优化 2: 开启 Maven 自动缓存
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Set up Rust (x86_64-pc-windows-msvc)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/src-tauri
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      # 优化 3: -T 1C 开启多线程并行构建
+      - name: Build backend fat jar
+        run: mvn -B -T 1C -DskipTests package
+
+      - name: Build jlink runtime
+        shell: bash
+        run: |
+          rm -rf jlink-runtime
+          jlink --no-header-files --no-man-pages --strip-debug --compress=zip-6 \
+            --add-modules java.se,jdk.unsupported,jdk.zipfs,jdk.charsets,jdk.localedata,jdk.crypto.ec,jdk.crypto.cryptoki \
+            --output jlink-runtime
+          head -3 jlink-runtime/release
+
+      - name: Assemble Tauri resources (app.jar + runtime)
+        shell: bash
+        run: |
+          mkdir -p frontend/src-tauri/resources
+          cp target/kafka-visualizer-*.jar frontend/src-tauri/resources/app.jar
+          rm -rf frontend/src-tauri/resources/runtime
+          cp -r jlink-runtime frontend/src-tauri/resources/runtime
+          ls -la frontend/src-tauri/resources
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend (vue-tsc + vite)
+        working-directory: frontend
+        run: pnpm build
+
+      # 注：Tauri CLI 2.x 没有 --no-before-build 参数（曾导致 CI 构建直接失败）。
+      # beforeBuildCommand 会把 pnpm build 再幂等跑一遍，多花约 1 分钟，接受；
+      # 若要省掉重复构建，删掉上面的 "Build frontend" 步骤即可。
+      - name: Build Tauri app
+        working-directory: frontend
+        run: pnpm tauri build --target x86_64-pc-windows-msvc
+
+      # 免安装绿色版：裸 exe（Tauri 打包时本来就会产出）+ resources/ 按相对位置摆放。
+      # Rust 侧 resource_dir 解析为 exe 所在目录，探测 <exe>/resources/app.jar 与
+      # resources/runtime/bin/java.exe —— 解压后双击 KafkaVisualizer.exe 即可运行。
+      # 唯一前提：目标机器需有 WebView2 Runtime（Win11 自带，Win10 多数已随 Edge 预装）。
+      - name: Assemble portable package (no-install)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path portable/KafkaVisualizer | Out-Null
+          Copy-Item frontend/src-tauri/target/x86_64-pc-windows-msvc/release/app.exe portable/KafkaVisualizer/KafkaVisualizer.exe
+          Copy-Item -Recurse frontend/src-tauri/resources portable/KafkaVisualizer/resources
+          Compress-Archive -Path portable/KafkaVisualizer -DestinationPath kafka-visualizer-windows-portable.zip
+          Get-ChildItem -Recurse portable | Select-Object FullName, Length
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kafka-visualizer-windows-x64
+          path: |
+            frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+            frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+            kafka-visualizer-windows-portable.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish release (tag push only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false # 全自动：直接发布，无需手动点 Publish
+          generate_release_notes: true # 自动汇总自上个 tag 以来的变更作为发布说明
+          files: |
+            frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+            frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+            kafka-visualizer-windows-portable.zip

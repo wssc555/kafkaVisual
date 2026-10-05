@@ -1,0 +1,74 @@
+server:
+  port: 8080
+  # 桌面(Tauri sidecar)模式:由 Rust 侧传 --server.port=0 让 Spring 绑定随机空闲端口,
+  # 再以 --announce-port 让后端在 stdout 打印一行 PORT=<port> 供父进程握手
+  # (见 config/PortAnnouncer,任务 021)。裸跑 / 开发模式保持 8080 不变。
+
+# ============================================================================
+# 配置分层说明(多集群改造后,务必记住这一条)
+#
+#   1) 集群的连接参数(Kafka 地址、SASL、ZK)已不再以本文件为事实源 —— 它们存在
+#      SQLite/PG/MySQL 的 cluster_config 表里,每个集群一份,由 UI 增删改。
+#   2) 本文件里的 kafka.bootstrap-servers / kafka.security / zk.connect-string
+#      降级为「首次启动种子配置」:仅当集群表为空且 bootstrap-servers 非空时,
+#      ClusterSeedImporter 把它导入成第一条集群记录(name=default)。
+#      三项默认留空 = 零集群启动,首次进 UI 手动添加集群;
+#      此后改本文件不会再影响已有集群;想重新种子化请清空 cluster_config 表。
+#   3) kafka.admin.* / kafka.consumer.* / kafka.producer.* / zk.session-* 仍是
+#      全局默认值:由 ClusterConnectionFactory 注入到每个集群的客户端。
+#   4) 数据源(SQLite / PostgreSQL / MySQL)的选择存在 app-data 目录下的
+#      storage.json,可经 /api/storage 读写;切换需重启生效(设计 §3.1)。
+# ============================================================================
+kafka:
+  # 种子配置(仅首次导入):集群表为空且本值非空时,ClusterSeedImporter 才导入
+  # 第一条集群记录(name=default)。默认留空 = 首次启动零集群,由用户在 UI 添加。
+  # 无头部署可用环境变量 KAFKA_BOOTSTRAP_SERVERS 覆盖实现自动种子化。
+  # 切勿把真实 broker 地址/凭据写进本文件(会进入 git 历史)。
+  bootstrap-servers: ""
+  security:
+    # 种子 SASL 配置:仅随种子导入生效;bootstrap-servers 为空时整组被忽略。
+    protocol: ""            # 空=无认证;启用 SASL 设为 SASL_PLAINTEXT 或 SASL_SSL
+    sasl-mechanism: "PLAIN" # PLAIN / SCRAM-SHA-256 / SCRAM-SHA-512
+    username: ""
+    password: ""
+  admin:
+    # AdminClient / Consumer 的阻塞超时,须满足 request < default < 前端 axios timeout(15000)。
+    # 最坏耗时 ≈ default-api-timeout-ms + 一次 request-timeout-ms。
+    # 这也是 ClusterConnectionManager 单次建连探活的最坏阻塞上限。
+    default-api-timeout-ms: 10000
+    request-timeout-ms: 5000
+  consumer:
+    # 池大小是「每集群」的:多集群并发下实际句柄数 = pool-size × 活跃集群数。
+    pool-size: 10
+    borrow-timeout-ms: 3000
+    poll-timeout-ms: 1000
+    query-max-count: 1000
+    # 超过该 UTF-8 字节数的 value 不做 JSON 美化(保护 CPU 与响应体)。
+    max-format-bytes: 65536
+  producer:
+    acks: "all"
+    send-timeout-ms: 10000
+
+zk:
+  # 种子配置:导入首条集群时作为它的 zk_connect_string。空 = 该集群 KRaft 模式。
+  # 运行期是否 ZK 模式按「集群」判断(connection.zkAvailable()),不再全局开关。
+  connect-string: ""
+  session-timeout-ms: 30000
+  connection-timeout-ms: 10000
+  # 递归列出的两层保护:误传 / 或 /brokers 这类大子树时不会永不返回,超限置 truncated=true。
+  max-recursive-depth: 5
+  max-recursive-nodes: 2000
+  # 递归时同层 stat 的并发度:同一 session 的在途请求数需要上界,跨机房紧张时可降到 8。
+  parallel-stat-fetches: 16
+
+cluster:
+  # 空闲回收:超过该分钟数没有任何业务访问的连接会被 close,下次请求重建。
+  idle-evict-minutes: 30
+
+archive:
+  # 全局归档开关:false 时所有集群都不启动归档器(已落库的归档仍可查询)。
+  # 集成测试基建设为 false —— 归档器是常驻后台消费者,会给共享上下文的断言引入时序噪声。
+  enabled: true
+  # 体量保护(设计 §3.4):超限只存占位,保证 offset 连续性不断档。
+  max-message-bytes: 1048576   # 1MB:value 超限 → 存 NULL + headers 标 __truncated
+  max-header-bytes: 4096       # 4KB:headers JSON 超限 → 整体替换为截断标记

@@ -1,0 +1,146 @@
+# macOS(Apple Silicon)安装包每日构建(dmg)。
+#
+# 触发:
+#   1. workflow_dispatch —— Actions 页手动 Run(云端测试);
+#   2. schedule —— 每天 UTC 20:31(北京时间 04:31)自动跑,产物做每日快照;
+#   3. push tag v* —— 自动发布到 GitHub Releases（draft: false，无需手动 Publish）。
+#
+# 注意: schedule 只对「默认分支」上的本文件生效;仓库 60 天无活动后 GitHub 会自动停用定时。
+# 已按要求去掉 Intel(x86_64-apple-darwin)平台:仅出 arm64 dmg,
+# 覆盖 Apple Silicon 全系(2020 年后的 Mac)。
+name: Tauri Build (macOS)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '31 20 * * *'
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # tag 触发时向 release 上传文件
+  actions: write # 删除上一次运行的同名 artifact（滚动覆盖）
+
+env:
+  CARGO_INCREMENTAL: 0 # 关闭 Rust 增量编译，减小缓存体积并加速 CI 链接
+
+jobs:
+  build-tauri-macos:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # upload-artifact@v4 没有跨 run 的「覆盖」：同名 artifact 按运行各存一份，
+      # 每日定时构建会把免费账户 500MB 制品存储配额涨满（"Artifact storage quota has been hit"）。
+      # 构建前删掉上一次运行的同名 artifact —— 仓库里每平台始终只保留最新一份（等效滚动覆盖）。
+      # 需要 permissions.actions: write；首次运行无可删对象为空集，正常通过。
+      # retention-days 保留 14 天，仅作本步骤意外失败时的兜底。
+      - name: Delete previous artifact (rolling overwrite)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ids=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" --paginate \
+            -q '.artifacts[] | select(.name == "kafka-visualizer-macos-arm64" and .expired == false) | .id')
+          if [ -z "$ids" ]; then
+            echo "no previous artifact, nothing to delete"
+          else
+            for id in $ids; do
+              gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+              echo "deleted artifact $id"
+            done
+          fi
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Set up Rust (aarch64-apple-darwin)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/src-tauri
+
+      # 版本不写死,由 frontend/package.json 的 packageManager 字段(pnpm@12.5.1)决定
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Build backend fat jar
+        run: mvn -B -T 1C -DskipTests package
+
+      # 模块集说明(宁多勿缺,缺模块只会在用户机器运行时炸):
+      #   java.se            全部 SE 平台模块(Spring/Kafka/JDBC/三种 JDBC 驱动)
+      #   jdk.unsupported    sun.misc.Unsafe —— kafka-clients/netty 硬依赖,缺了直接 NoClassDefFoundError
+      #   jdk.crypto.ec      TLS 椭圆曲线(SASL_SSL / SSL)
+      #   jdk.crypto.cryptoki SunPKCS11(部分内网 NSS/硬件 token 场景)
+      #   jdk.charsets       GBK 等扩展字符集(JDK9+ 不在 java.base)
+      #   jdk.localedata     中文日期/数字格式化
+      #   jdk.zipfs          zip 文件系统(部分库按 zip 打开嵌套 jar / 归档)
+      # 不加 jdk.crypto.mscapi:Windows-only 模块在 macOS 的 jlink 里不存在,会直接报错。
+      - name: Build jlink runtime
+        run: |
+          rm -rf jlink-runtime
+          jlink --no-header-files --no-man-pages --strip-debug --compress=zip-6 \
+            --add-modules java.se,jdk.unsupported,jdk.zipfs,jdk.charsets,jdk.localedata,jdk.crypto.ec,jdk.crypto.cryptoki \
+            --output jlink-runtime
+          head -3 jlink-runtime/release
+
+      - name: Assemble Tauri resources (app.jar + runtime)
+        run: |
+          mkdir -p frontend/src-tauri/resources
+          cp target/kafka-visualizer-*.jar frontend/src-tauri/resources/app.jar
+          rm -rf frontend/src-tauri/resources/runtime
+          cp -r jlink-runtime frontend/src-tauri/resources/runtime
+          ls -la frontend/src-tauri/resources
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend (vue-tsc + vite)
+        working-directory: frontend
+        run: pnpm build
+
+      # beforeBuildCommand(pnpm build)会再跑一次,幂等无妨;
+      # 显式单独一步是为了让前端错误在日志里与 Rust 编译错误清晰分离。
+      - name: Build Tauri app
+        working-directory: frontend
+        run: pnpm tauri build --target aarch64-apple-darwin
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kafka-visualizer-macos-arm64
+          path: |
+            frontend/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish release (tag push only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false # 全自动：直接发布，无需手动点 Publish
+          generate_release_notes: true # 自动汇总自上个 tag 以来的变更作为发布说明
+          files: |
+            frontend/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
