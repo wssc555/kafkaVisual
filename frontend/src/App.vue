@@ -56,14 +56,64 @@
             <el-icon><Files /></el-icon>
             <span>{{ t('app.menu.metadata') }}</span>
           </el-menu-item>
+          <!--
+            「巡检」下拉菜单(默认收起):概览 / 规则 / 告警通道 / 告警中心。
+            与「集群」下拉同款处理:点击标题跳 /inspection,展开由 el-sub-menu 原生处理;
+            /inspection 与 /inspection/rules 路由下标题手动高亮 —— 它不是 menu-item,
+            没有原生 is-active 态。
+          -->
+          <el-sub-menu index="inspection-nav">
+            <template #title>
+              <span
+                :class="{ 'cluster-title--active': isInspectionActive }"
+                class="cluster-title"
+                @click="goInspectionOverview"
+              >
+                <el-icon><Bell /></el-icon>
+                <span>{{ t('inspection.menu.inspection') }}</span>
+              </span>
+            </template>
+            <el-menu-item index="/inspection">
+              <el-icon><DataAnalysis /></el-icon>
+              <span>{{ t('inspection.menu.overview') }}</span>
+            </el-menu-item>
+            <el-menu-item index="/inspection/rules">
+              <el-icon><Timer /></el-icon>
+              <span>{{ t('inspection.menu.rules') }}</span>
+            </el-menu-item>
+            <el-menu-item index="/inspection/channels">
+              <el-icon><Promotion /></el-icon>
+              <span>{{ t('inspection.menu.channels') }}</span>
+            </el-menu-item>
+            <el-menu-item index="/inspection/alerts">
+              <el-icon><Warning /></el-icon>
+              <span>{{ t('inspection.menu.alerts') }}</span>
+            </el-menu-item>
+          </el-sub-menu>
           <el-menu-item index="/clusters">
             <el-icon><Setting /></el-icon>
             <span>{{ t('app.menu.clusterManage') }}</span>
           </el-menu-item>
-          <el-menu-item index="/settings">
-            <el-icon><Tools /></el-icon>
-            <span>{{ t('app.menu.settings') }}</span>
-          </el-menu-item>
+          <!--
+            「设置」下拉菜单(默认收起):「数据源设置」一个子项。
+            点击标题仅展开/收起,不导航;/settings 路由下子项原生高亮,
+            标题按菜单激活色手动补高亮(它不是 menu-item,没有原生 is-active 态)。
+          -->
+          <el-sub-menu index="settings-nav">
+            <template #title>
+              <span
+                :class="{ 'cluster-title--active': isSettingsActive }"
+                class="cluster-title"
+              >
+                <el-icon><Tools /></el-icon>
+                <span>{{ t('app.menu.settings') }}</span>
+              </span>
+            </template>
+            <el-menu-item index="/settings">
+              <el-icon><Link /></el-icon>
+              <span>{{ t('app.menu.dataSource') }}</span>
+            </el-menu-item>
+          </el-sub-menu>
         </el-menu>
         <!-- 收起/展开导航：仅宽/中档显示(窄档抽屉由遮罩/汉堡键收起)；折叠态仅图标 -->
         <div v-if="!isNarrow" class="aside-footer">
@@ -101,6 +151,8 @@
         <span v-else-if="clustersLoaded" class="active-cluster active-cluster--none">
           {{ t('app.header.noCluster') }}
         </span>
+        <!-- 站内通知铃铛：未读徽标与通知面板，计数与侧边栏巡检徽标同源 -->
+        <NotificationBell />
         <!-- 语言切换:下拉即切,localStorage 持久化 -->
         <el-dropdown class="lang-switch" trigger="click" @command="onLanguageCommand">
           <el-button :aria-label="t('app.header.language')" text>
@@ -146,23 +198,31 @@ import {computed, onBeforeUnmount, onMounted, ref, watch, watchEffect} from 'vue
 import {useRoute, useRouter} from 'vue-router'
 import {useI18n} from 'vue-i18n'
 import {
+  Bell,
+  DataAnalysis,
   DataLine,
   Expand,
   Files,
   Fold,
   Folder,
+  Link,
   Menu as MenuIcon,
   Monitor,
+  Promotion,
   Setting,
+  Timer,
   Tools,
   User,
+  Warning,
 } from '@element-plus/icons-vue'
 import type {MenuInstance} from 'element-plus'
 import {ElMessage} from 'element-plus'
 import ClusterSwitcher from './components/ClusterSwitcher.vue'
 import FirstRunGuide from './components/FirstRunGuide.vue'
+import NotificationBell from './components/NotificationBell.vue'
 import StartupDiagnostics from './components/StartupDiagnostics.vue'
 import {bootReady, bootStatus} from './composables/bootLog'
+import {useNotifications} from './composables/useNotifications'
 import {PREF_KEYS, useGlobalState} from './composables/useGlobalState'
 import {useResponsive} from './composables/useResponsive'
 import {currentLocale, epLocale, LANGUAGES, type LocaleId, setLanguage} from './i18n'
@@ -192,10 +252,25 @@ const goClusterPage = () => {
   router.push('/cluster')
 }
 
-// 路由切到 /consumer-groups 时展开下拉,保证「消费组」高亮子项可见;
+/** 点击「巡检」下拉标题:进入巡检概览(它与 /inspection 子项等价)。 */
+const goInspectionOverview = () => {
+  router.push('/inspection')
+}
+
+/** 巡检概览/规则页下高亮下拉标题(标题不是 menu-item,无原生 is-active)。 */
+const isInspectionActive = computed(
+  () => route.path === '/inspection' || route.path === '/inspection/rules',
+)
+
+/** 数据源设置页下高亮「设置」下拉标题(标题不是 menu-item,无原生 is-active)。 */
+const isSettingsActive = computed(() => route.path === '/settings')
+
+// 路由切到子项时展开对应下拉,保证高亮子项可见;
 // /cluster 不展开 —— 下拉默认收起。EP 2.14 的 default-active 变化只更新高亮、不动 openedMenus。
 watch(currentRoute, (p) => {
   if (p === '/consumer-groups') menuRef.value?.open('cluster-nav')
+  if (p.startsWith('/inspection')) menuRef.value?.open('inspection-nav')
+  if (p === '/settings') menuRef.value?.open('settings-nav')
 })
 
 // 全局单例：由 App 创建并 provide，其余组件通过 injectGlobalState() 读取
@@ -213,6 +288,9 @@ const {
   savePreference,
   preferences,
 } = useGlobalState()
+
+// 通知中心单例：未读计数只驱动顶栏铃铛徽标（侧边栏「巡检」入口不展示徽标）
+const {refreshUnreadCount} = useNotifications()
 
 /** 侧边导航折叠态：true = 仅图标（宽/中档有效；窄档走抽屉，不折叠） */
 const collapsed = ref(false)
@@ -354,11 +432,25 @@ const onVisibilityChange = () => {
   if (!document.hidden && clusters.value.length > 0) {
     refreshStatuses().catch(() => {})
   }
+  if (!document.hidden) {
+    refreshUnreadCount().catch(() => {})
+  }
 }
+
+// ---- 巡检未读徽标(30s 轮询)：状态与动作由 useNotifications 提供 ----
+let unreadTimer: number | null = null
 
 onMounted(() => {
   document.addEventListener('visibilitychange', onVisibilityChange)
   startStatusPolling()
+  // 轮询启动前先拉一次,避免最长 30s 的空白期
+  refreshUnreadCount().catch(() => {})
+  if (unreadTimer === null) {
+    unreadTimer = window.setInterval(() => {
+      if (document.hidden) return
+      refreshUnreadCount().catch(() => {})
+    }, 30_000)
+  }
 })
 
 onBeforeUnmount(() => {
@@ -366,6 +458,10 @@ onBeforeUnmount(() => {
   if (statusTimer !== null) {
     clearInterval(statusTimer)
     statusTimer = null
+  }
+  if (unreadTimer !== null) {
+    clearInterval(unreadTimer)
+    unreadTimer = null
   }
 })
 </script>

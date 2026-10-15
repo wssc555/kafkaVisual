@@ -21,6 +21,8 @@ import * as topicDialogs from './messages/topicDialogs'
 import * as clusterManage from './messages/clusterManage'
 import * as clusterBrowse from './messages/clusterBrowse'
 import * as groupsMeta from './messages/groupsMeta'
+import * as inspection from './messages/inspection'
+import * as notification from './messages/notification'
 
 export type LocaleId = 'zh-CN' | 'en-US'
 
@@ -65,6 +67,8 @@ export const i18n = createI18n({
       clusterManage: clusterManage.zh,
       clusterBrowse: clusterBrowse.zh,
       groupsMeta: groupsMeta.zh,
+      inspection: inspection.zh,
+      notification: notification.zh,
     },
     'en-US': {
       common: common.en,
@@ -75,6 +79,8 @@ export const i18n = createI18n({
       clusterManage: clusterManage.en,
       clusterBrowse: clusterBrowse.en,
       groupsMeta: groupsMeta.en,
+      inspection: inspection.en,
+      notification: notification.en,
     },
   },
 })
@@ -102,7 +108,7 @@ export const setLanguage = (locale: LocaleId) => {
 try {
   document.documentElement.lang = initialLocale
 } catch {
-  // ignore
+  // 忽略:SSR/node 环境下没有 document
 }
 
 export default i18n

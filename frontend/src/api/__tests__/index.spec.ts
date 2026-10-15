@@ -1,6 +1,6 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 
-// ---- Types for mocks ----
+// ---- Mock 类型 ----
 type MockFn = ReturnType<typeof vi.fn>
 
 /** 通用 mock axios 工厂：Part 2/3 各 describe 复用，减少样板 */
@@ -28,11 +28,10 @@ const fullMock = () => {
 }
 
 // ============================================================
-// Part 1: Interceptor tests (TC-FE-INT-*)
+// Part 1: 响应拦截器测试 (TC-FE-INT-*)
 // ============================================================
-// These tests exercise the actual interceptors.response.use callbacks
-// registered by api/index.ts, by importing the real axios and capturing
-// the callbacks via a spy on interceptors.response.use.
+// 直接引入真实 axios，用 spy 捕获 interceptors.response.use 注册的
+// 回调，覆盖 api/index.ts 里实际生效的拦截逻辑。
 // ============================================================
 
 describe('Response interceptors (TC-FE-INT-*)', () => {
@@ -143,11 +142,11 @@ describe('Response interceptors (TC-FE-INT-*)', () => {
 })
 
 // ============================================================
-// Part 2: API function tests (TC-FE-CLS/TOP/MSG/CG/ZK)
+// Part 2: API 函数测试 (TC-FE-CLS/TOP/MSG/CG/ZK)
 // ============================================================
-// These tests verify request construction (URL, method, params, body).
-// Mock resolves directly with the "post-interceptor" value (i.e. the
-// backend body), since interceptor logic is already covered by INT-*.
+// 验证请求构造（URL、method、params、body）。
+// mock 直接解析为"过拦截器后"的值（即后端响应体）——
+// 拦截器逻辑已由 INT-* 覆盖。
 //
 // 功能端点全部挂集群段 `/c/{clusterId}`，
 // 断言统一用 clusterId=1；集群段自身用模板字符串拼装、无用户可控分段，
@@ -1076,11 +1075,10 @@ describe('Storage / preference / archive / favorite API (TC-FE-STG-*)', () => {
 })
 
 // ============================================================
-// Part 3: Error propagation tests (TC-FE-ERR-*)
+// Part 3: 错误传播测试 (TC-FE-ERR-*)
 // ============================================================
-// These verify that HTTP errors propagate correctly through the
-// API functions. We use mockRejectedValue with Error(msg) since
-// interceptor logic is already covered in TC-FE-INT-*.
+// 验证 HTTP 错误能正确穿过 API 函数向上传播。用 mockRejectedValue
+// 抛 Error(msg)——拦截器逻辑已由 TC-FE-INT-* 覆盖。
 // ============================================================
 
 describe('Error propagation (TC-FE-ERR-*)', () => {

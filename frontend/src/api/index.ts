@@ -101,7 +101,16 @@ api.interceptors.response.use(
   },
 )
 
-// ---- Types ----
+/**
+ * 唯一的 axios 实例。
+ *
+ * 导出给同层模块（如 `api/inspection.ts`）复用 —— 必须共用同一实例，
+ * 否则 `initApiBaseUrl` 在桌面模式下改写的 `baseURL`（指向 sidecar 实际端口）
+ * 对新建的第二个实例无效，表现为"桌面端除了首页全 404"。
+ */
+export {api}
+
+// ---- 类型 ----
 
 export interface BrokerInfo {
   id: number
@@ -285,7 +294,7 @@ export interface LogDirSummary {
   error?: string | null
 }
 
-// ---- Dashboard ----
+// ---- 仪表盘 ----
 
 export interface DashboardOverview {
   clusterId: string
@@ -652,7 +661,7 @@ export interface GroupDeleteResult {
   deleted: boolean
 }
 
-// ---- API functions ----
+// ---- API 函数 ----
 
 /**
  * 路径参数安全编码。

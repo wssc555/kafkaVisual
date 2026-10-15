@@ -26,7 +26,6 @@
     </el-card>
 
     <el-tabs v-model="activeTab">
-      <!-- Brokers -->
       <el-tab-pane label="Brokers" name="brokers">
         <el-table
           :data="brokers"
@@ -55,7 +54,6 @@
         </template>
       </el-tab-pane>
 
-      <!-- Topics -->
       <el-tab-pane :label="t('groupsMeta.metadata.topicsTab')" name="topics">
         <el-form :inline="true" @submit.prevent>
           <el-form-item>
@@ -79,7 +77,6 @@
         </el-descriptions>
       </el-tab-pane>
 
-      <!-- ACLs -->
       <el-tab-pane label="ACLs" name="acls">
         <el-table :data="acls" v-loading="loadingAcls" stripe>
           <el-table-column label="Principal" min-width="160" prop="principal" show-overflow-tooltip />
@@ -92,7 +89,6 @@
         <el-empty v-if="!acls.length && !loadingAcls" :description="t('groupsMeta.metadata.noAcls')" />
       </el-tab-pane>
 
-      <!-- Log Dirs -->
       <el-tab-pane label="Log Dirs" name="logdirs">
         <el-table v-loading="loadingLogDirs" :data="logDirSummaries" stripe>
           <el-table-column label="Broker" prop="brokerId" width="90" />

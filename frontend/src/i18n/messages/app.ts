@@ -13,6 +13,7 @@ export const zh = {
     metadata: '元数据',
     clusterManage: '集群管理',
     settings: '设置',
+    dataSource: '数据源设置',
   },
   header: {
     noCluster: '未选择集群',
@@ -62,6 +63,7 @@ export const en: AppSchema = {
     metadata: 'Metadata',
     clusterManage: 'Cluster Management',
     settings: 'Settings',
+    dataSource: 'Data Source Settings',
   },
   header: {
     noCluster: 'No cluster selected',

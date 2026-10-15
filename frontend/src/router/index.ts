@@ -10,6 +10,10 @@ const ZkBrowser = () => import('../views/ZkBrowser.vue')
 const ClusterMetadata = () => import('../views/ClusterMetadata.vue')
 const ClusterManage = () => import('../views/ClusterManage.vue')
 const Settings = () => import('../views/Settings.vue')
+const InspectionOverview = () => import('../views/InspectionOverview.vue')
+const InspectionRules = () => import('../views/InspectionRules.vue')
+const InspectionChannels = () => import('../views/InspectionChannels.vue')
+const InspectionAlerts = () => import('../views/InspectionAlerts.vue')
 
 const routes = [
   { path: '/', name: 'Dashboard', component: Dashboard },
@@ -20,8 +24,13 @@ const routes = [
   { path: '/metadata', name: 'ClusterMetadata', component: ClusterMetadata },
   // 集群注册表管理(增删改/连接断开);零集群时是全部路由的重定向落点
   { path: '/clusters', name: 'ClusterManage', component: ClusterManage },
-  // 数据源设置(SQLite/PostgreSQL/MySQL)与偏好
+  // 数据源设置(SQLite/PostgreSQL/MySQL);侧栏入口为「设置」下拉下的「数据源设置」子项
   { path: '/settings', name: 'Settings', component: Settings },
+  // 巡检:概览/通道/告警为全局页;规则页跟随当前集群上下文(与 Cluster / Topic 同模式)
+  { path: '/inspection', name: 'InspectionOverview', component: InspectionOverview },
+  { path: '/inspection/rules', name: 'InspectionRules', component: InspectionRules },
+  { path: '/inspection/channels', name: 'InspectionChannels', component: InspectionChannels },
+  { path: '/inspection/alerts', name: 'InspectionAlerts', component: InspectionAlerts },
   // 未匹配 URL 不再渲染空白页，给出明确的 404 引导
   {
     path: '/:pathMatch(.*)*',
