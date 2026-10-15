@@ -1,7 +1,5 @@
 # Kafka Visualizer
 
-**本程序仅供学习了解, 请于下载后 24 小时内删除**
-
 <p align="right">
   <a href="README_EN.md">English</a> | 简体中文
 </p>
@@ -18,6 +16,10 @@
 - **消息归档** — 消息落库（SQLite / PostgreSQL / MySQL），支持时间范围回查
 - **ZooKeeper 浏览** — ZK 模式集群的节点树浏览与管理
 - **Dashboard** — 单集群总览 + 全部集群多总览
+- **定时巡检与多通道告警** — 按集群定义巡检规则（指标 + 阈值 + 可选时间窗口 + 每规则独立 Cron），
+  触发后经站内信 / 邮件 / Webhook / IM 机器人（钉钉 / 飞书 / 企业微信）通知；状态去重 + 恢复通知，
+  告警中心跨集群汇总与确认，顶部未读徽标
+- **站内通知中心** — 顶栏铃铛展示未读徽标与最近通知面板，支持单条/全部已读，点击跳转告警中心详情
 
 ## 架构
 
@@ -66,6 +68,7 @@
 - `kafka-clients` 3.9.0 — Kafka 直连客户端
 - `curator-framework` — ZooKeeper 客户端
 - `commons-pool2` — 消费者连接池
+- `spring-boot-starter-mail` — 巡检告警的 SMTP 通道
 - `caffeine` — 本地缓存
 - `sqlite-jdbc` / `postgresql` / `mysql-connector-j` — 存储后端
 
@@ -139,6 +142,5 @@ cd .. && mvn clean package     # 产物 target/kafka-visualizer-1.0.0.jar
 
 ## 注意事项
 
-- 切勿将真实 broker 地址/凭据写入 `application.yml`（会进入 git 历史），统一在 UI 中管理
 - 删除 Topic / 删除消费组操作不可逆
 - `data/` 目录包含本地数据库与加密密钥（`.key`），迁移或备份时需一并保存

@@ -50,6 +50,11 @@ public class PostgresDialect implements StorageDialect {
     }
 
     @Override
+    public String v3ScriptPath() {
+        return "schema/V3__inspection.postgres.sql";
+    }
+
+    @Override
     public String quoteIdent(String identifier) {
         return "\"" + identifier + "\"";
     }
@@ -106,6 +111,37 @@ public class PostgresDialect implements StorageDialect {
                 + " DO UPDATE SET " + quoteIdent("last_seen_at") + " = EXCLUDED." + quoteIdent("last_seen_at")
                 + ", " + quoteIdent("last_partition_count") + " = EXCLUDED." + quoteIdent("last_partition_count")
                 + ", " + quoteIdent("deleted") + " = 0";
+    }
+
+    @Override
+    public String deleteSamplesKeepLatestSql() {
+        return "DELETE FROM " + quoteIdent("metric_sample")
+                + " WHERE " + quoteIdent("rule_id") + " = ? AND " + quoteIdent("scope_id") + " = ?"
+                + " AND " + quoteIdent("id") + " NOT IN (SELECT " + quoteIdent("id")
+                + " FROM " + quoteIdent("metric_sample")
+                + " WHERE " + quoteIdent("rule_id") + " = ? AND " + quoteIdent("scope_id") + " = ?"
+                + " ORDER BY " + quoteIdent("sampled_at") + " DESC, " + quoteIdent("id") + " DESC LIMIT ?)";
+    }
+
+    @Override
+    public String upsertRuleStateFiringSql() {
+        return upsertRuleStateSql("FIRING", quoteIdent("last_fired_at"));
+    }
+
+    @Override
+    public String upsertRuleStateRecoveredSql() {
+        return upsertRuleStateSql("OK", quoteIdent("last_recovered_at"));
+    }
+
+    private String upsertRuleStateSql(String state, String timestampColumn) {
+        return "INSERT INTO " + quoteIdent("rule_state")
+                + " (" + quoteIdent("rule_id") + ", " + quoteIdent("scope_id") + ", "
+                + quoteIdent("current_state") + ", " + quoteIdent("last_evaluated_at") + ", "
+                + timestampColumn + ") VALUES (?, ?, '" + state + "', ?, ?)"
+                + " ON CONFLICT (" + quoteIdent("rule_id") + ", " + quoteIdent("scope_id") + ")"
+                + " DO UPDATE SET " + quoteIdent("current_state") + " = EXCLUDED." + quoteIdent("current_state")
+                + ", " + quoteIdent("last_evaluated_at") + " = EXCLUDED." + quoteIdent("last_evaluated_at")
+                + ", " + timestampColumn + " = EXCLUDED." + timestampColumn;
     }
 
     @Override

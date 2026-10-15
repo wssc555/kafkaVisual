@@ -259,7 +259,6 @@ public class ConsumerPool implements AutoCloseable {
         /** 无操作:assignment 由调用方(MessageService)在借用后显式设置。 */
         @Override
         public void activateObject(PooledObject<KafkaConsumer<byte[], byte[]>> p) {
-            // no-op
         }
     }
 }

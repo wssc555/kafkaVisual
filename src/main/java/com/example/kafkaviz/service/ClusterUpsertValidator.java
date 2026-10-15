@@ -65,18 +65,10 @@ public class ClusterUpsertValidator {
         validate(req, false);
     }
 
-    // ---------------------------------------------------------------
-    // PASSWORD
-    // ---------------------------------------------------------------
-
     /** 新建 / 测连场景:秘密字段必须给齐。 */
     public void validateForCreate(ClusterUpsertRequest req) {
         validate(req, true);
     }
-
-    // ---------------------------------------------------------------
-    // MTLS
-    // ---------------------------------------------------------------
 
     /**
      * @param requireCredentials true = 本次请求体是凭据全量(新建 / 测连),
@@ -105,6 +97,10 @@ public class ClusterUpsertValidator {
         }
     }
 
+    // ---------------------------------------------------------------
+    // PASSWORD
+    // ---------------------------------------------------------------
+
     private void validatePassword(ClusterUpsertRequest req, boolean requireCredentials) {
         String mechanism = req.saslMechanismOrDefault().toUpperCase(Locale.ROOT);
         if (!SASL_MECHANISMS.contains(mechanism)) {
@@ -119,7 +115,7 @@ public class ClusterUpsertValidator {
     }
 
     // ---------------------------------------------------------------
-    // OAUTH
+    // MTLS
     // ---------------------------------------------------------------
 
     private void validateMtls(ClusterUpsertRequest req, boolean requireCredentials) {
@@ -146,10 +142,6 @@ public class ClusterUpsertValidator {
             requireHeader(trustCerts, CERT_HEADER, "sslTrustCertsPem");
         }
     }
-
-    // ---------------------------------------------------------------
-    // CUSTOM
-    // ---------------------------------------------------------------
 
     /**
      * 私钥格式校验。
@@ -183,7 +175,7 @@ public class ClusterUpsertValidator {
     }
 
     // ---------------------------------------------------------------
-    // 工具
+    // OAUTH
     // ---------------------------------------------------------------
 
     private void validateOAuth(ClusterUpsertRequest req, boolean requireCredentials) {
@@ -209,6 +201,10 @@ public class ClusterUpsertValidator {
                     + "(grant type is always client_credentials)");
         }
     }
+
+    // ---------------------------------------------------------------
+    // CUSTOM
+    // ---------------------------------------------------------------
 
     private void validateCustom(ClusterUpsertRequest req) {
         String protocol = req.securityProtocolOrDefault();

@@ -62,6 +62,11 @@ public class MySqlDialect implements StorageDialect {
     }
 
     @Override
+    public String v3ScriptPath() {
+        return "schema/V3__inspection.mysql.sql";
+    }
+
+    @Override
     public String quoteIdent(String identifier) {
         return "`" + identifier + "`";
     }
@@ -117,6 +122,39 @@ public class MySqlDialect implements StorageDialect {
                 + "`last_seen_at` = VALUES(`last_seen_at`), "
                 + "`last_partition_count` = VALUES(`last_partition_count`), "
                 + "`deleted` = 0";
+    }
+
+    @Override
+    public String deleteSamplesKeepLatestSql() {
+        // 派生表包装(SELECT * FROM (...) tmp):既绕过错误 1093(DELETE 目标表不能出现在
+        // 子查询 FROM 中),也规避了"LIMIT 不能直接出现在 IN 子查询里"的限制。
+        return "DELETE FROM " + quoteIdent("metric_sample")
+                + " WHERE " + quoteIdent("rule_id") + " = ? AND " + quoteIdent("scope_id") + " = ?"
+                + " AND " + quoteIdent("id") + " NOT IN (SELECT * FROM (SELECT " + quoteIdent("id")
+                + " FROM " + quoteIdent("metric_sample")
+                + " WHERE " + quoteIdent("rule_id") + " = ? AND " + quoteIdent("scope_id") + " = ?"
+                + " ORDER BY " + quoteIdent("sampled_at") + " DESC, " + quoteIdent("id") + " DESC LIMIT ?) tmp)";
+    }
+
+    @Override
+    public String upsertRuleStateFiringSql() {
+        return upsertRuleStateSql("FIRING", quoteIdent("last_fired_at"));
+    }
+
+    @Override
+    public String upsertRuleStateRecoveredSql() {
+        return upsertRuleStateSql("OK", quoteIdent("last_recovered_at"));
+    }
+
+    private String upsertRuleStateSql(String state, String timestampColumn) {
+        return "INSERT INTO " + quoteIdent("rule_state")
+                + " (" + quoteIdent("rule_id") + ", " + quoteIdent("scope_id") + ", "
+                + quoteIdent("current_state") + ", " + quoteIdent("last_evaluated_at") + ", "
+                + timestampColumn + ") VALUES (?, ?, '" + state + "', ?, ?)"
+                + " ON DUPLICATE KEY UPDATE "
+                + quoteIdent("current_state") + " = VALUES(" + quoteIdent("current_state") + "), "
+                + quoteIdent("last_evaluated_at") + " = VALUES(" + quoteIdent("last_evaluated_at") + "), "
+                + timestampColumn + " = VALUES(" + timestampColumn + ")";
     }
 
     @Override

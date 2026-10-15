@@ -50,8 +50,11 @@ public class SchemaInitializer implements ApplicationRunner {
     /** V2:cluster_config 认证相关列。 */
     private static final int V2 = 2;
 
+    /** V3:定时巡检 8 张表(纯建表,可重复执行,无 ALTER 类非幂等风险)。 */
+    private static final int V3 = 3;
+
     /** 当前目标版本 —— 新脚本落地时同步 +1。 */
-    private static final int CURRENT_VERSION = V2;
+    private static final int CURRENT_VERSION = V3;
 
     private static final Logger log = LoggerFactory.getLogger(SchemaInitializer.class);
 
@@ -67,8 +70,10 @@ public class SchemaInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        // V1 恒执行:全部语句幂等,顺便兜住"表被手工删掉"的极端情况
+        // V1/V3 恒执行:全部语句幂等,顺便兜住"表被手工删掉"的极端情况
+        // (V3 同为纯 CREATE IF NOT EXISTS,每次启动多跑几条 no-op DDL 的代价可忽略)
         executeScript(dialect.v1ScriptPath());
+        executeScript(dialect.v3ScriptPath());
 
         int applied = appliedVersion();
         if (applied < V1) {
@@ -79,6 +84,14 @@ public class SchemaInitializer implements ApplicationRunner {
             executeScript(dialect.v2ScriptPath());
             recordVersion(V2);
             applied = V2;
+        }
+        // V3 与 V2 的关键区别:纯 CREATE TABLE IF NOT EXISTS(索引在 MySQL 内联、
+        // 在 SQLite/PG 带 IF NOT EXISTS),整脚本可重复执行 —— 不存在 V2 那种
+        // "半执行后重跑报 duplicate column" 的风险;脚本已在上面恒执行,
+        // 版本守卫只负责把 schema_version 登记补齐。
+        if (applied < V3) {
+            recordVersion(V3);
+            applied = V3;
         }
         log.debug("Schema up to date (appliedVersion={}, target={})", applied, CURRENT_VERSION);
     }

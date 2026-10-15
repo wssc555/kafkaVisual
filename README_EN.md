@@ -16,6 +16,12 @@ A multi-cluster Kafka visualization and management tool. Supports cluster regist
 - **Message archiving** — Persist messages to database (SQLite / PostgreSQL / MySQL), query back by time range
 - **ZooKeeper browser** — Node tree browsing and management for ZK-mode clusters
 - **Dashboard** — Single-cluster overview + multi-overview across all clusters
+- **Scheduled inspection & multi-channel alerting** — Define per-cluster inspection rules
+  (metric + threshold + optional time window + per-rule Cron); notify via in-app / email / webhook /
+  IM bots (DingTalk / Feishu / WeCom). State de-duplication + recovery notifications,
+  a cross-cluster alert center with acknowledgement, and an unread badge in the header
+- **In-site notification center** — Top-bar bell with an unread badge and a recent notifications panel;
+  mark as read individually or in bulk; click through to alert details in the alert center
 
 ## Architecture
 
@@ -64,6 +70,7 @@ Frontend-backend separated architecture; the backend talks to Kafka directly (no
 - `kafka-clients` 3.9.0 — direct Kafka client
 - `curator-framework` — ZooKeeper client
 - `commons-pool2` — consumer connection pool
+- `spring-boot-starter-mail` — SMTP channel for inspection alerts
 - `caffeine` — local caching
 - `sqlite-jdbc` / `postgresql` / `mysql-connector-j` — storage backends
 
@@ -137,6 +144,5 @@ Deploy the frontend static files with Nginx/CDN and reverse-proxy `/api` to the 
 
 ## Caveats
 
-- Never write real broker addresses/credentials into `application.yml` (it would end up in git history); manage everything through the UI
 - Deleting a topic / deleting a consumer group is irreversible
 - The `data/` directory contains the local database and the encryption key (`.key`); keep both together when migrating or backing up

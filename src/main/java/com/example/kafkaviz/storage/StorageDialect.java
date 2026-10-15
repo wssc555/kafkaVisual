@@ -49,6 +49,16 @@ public interface StorageDialect {
     String v2ScriptPath();
 
     /**
+     * V3 定时巡检扩展脚本的 classpath 路径。
+     *
+     * <p>由 {@code SchemaInitializer} 在 {@code schema_version < 3} 时执行:
+     * 建出巡检 8 张表({@code inspection_rule} / {@code rule_condition} /
+     * {@code metric_sample} / {@code rule_state} / {@code alert_record} /
+     * {@code alert_channel} / {@code rule_channel} / {@code alert_dispatch_log})。
+     */
+    String v3ScriptPath();
+
+    /**
      * 标识符引用。SQLite/PG 用双引号,MySQL 用反引号。
      *
      * <p>表名只可能是 {@code msg_<数字>} 或固定基础表名,注入风险极低;
@@ -252,6 +262,40 @@ public interface StorageDialect {
 
     /** 偏好 KV upsert:{@code key} 冲突时覆盖 value。 */
     String upsertPreferenceSql();
+
+    // ---------------------------------------------------------------
+    // 巡检表(024 起):滚动删除与 rule_state upsert 的方言差异
+    // ---------------------------------------------------------------
+
+    /**
+     * 巡检采样滚动删除:保留 {@code (rule_id, scope_id)} 下最新 N 行,其余删除。
+     *
+     * <p>参数绑定顺序固定为 {@code (ruleId, scopeId, ruleId, scopeId, keep)} ——
+     * 前两个是外层 DELETE 的过滤条件(缺了它就会把<b>其他规则</b>的采样一并删掉),
+     * 后三个属于子查询。
+     *
+     * <p>MySQL 必须把子查询再包一层派生表:它不允许 {@code DELETE} 的目标表出现在
+     * 子查询的 FROM 里(错误 1093),即使是 {@code NOT IN} 也一样;派生表形式
+     * {@code SELECT * FROM (...) tmp} 会把内层结果物化成临时表,从而绕过该限制,
+     * 同时也就顺带规避了"LIMIT 不能出现在 IN 子查询里"的老限制。
+     */
+    String deleteSamplesKeepLatestSql();
+
+    /**
+     * rule_state upsert(触发转移):不存在则插入 FIRING 行,存在则覆盖
+     * {@code current_state} / {@code last_evaluated_at} / {@code last_fired_at}。
+     *
+     * <p>参数绑定顺序:{@code (ruleId, scopeId, now, now)}。
+     */
+    String upsertRuleStateFiringSql();
+
+    /**
+     * rule_state upsert(恢复转移):不存在则插入 OK 行,存在则覆盖
+     * {@code current_state} / {@code last_evaluated_at} / {@code last_recovered_at}。
+     *
+     * <p>参数绑定顺序:{@code (ruleId, scopeId, now, now)}。
+     */
+    String upsertRuleStateRecoveredSql();
 
     /** 收藏存在性判断/删除用的列名(便于 Store 复用引号口径)。 */
     default String quotedColumn(String column) {

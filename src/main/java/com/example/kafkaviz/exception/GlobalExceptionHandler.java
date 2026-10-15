@@ -152,6 +152,63 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(50001, "Kafka error: " + ex.getMessage()));
     }
 
+    // ---- 巡检:规则定义非法(Cron/最小间隔/未知指标键/通道不存在/ZK scope 用于 KRaft) ----
+    @ExceptionHandler(com.example.kafkaviz.inspection.exception.InvalidRuleException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidRule(
+            com.example.kafkaviz.inspection.exception.InvalidRuleException ex) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(40005, ex.getMessage()));
+    }
+
+    // ---- 巡检:规则不存在(40404 是「集群不存在」,顺延到 40405) ----
+    @ExceptionHandler(com.example.kafkaviz.inspection.exception.RuleNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRuleNotFound(
+            com.example.kafkaviz.inspection.exception.RuleNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(40405, ex.getMessage()));
+    }
+
+    // ---- 巡检:通道不存在 ----
+    @ExceptionHandler(com.example.kafkaviz.inspection.exception.ChannelNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleChannelNotFound(
+            com.example.kafkaviz.inspection.exception.ChannelNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(40406, ex.getMessage()));
+    }
+
+    // ---- 巡检:告警不存在 ----
+    @ExceptionHandler(com.example.kafkaviz.inspection.exception.AlertNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAlertNotFound(
+            com.example.kafkaviz.inspection.exception.AlertNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(40407, ex.getMessage()));
+    }
+
+    // ---- 巡检:名称重复(规则名同集群 / 通道名全局) ----
+    @ExceptionHandler(com.example.kafkaviz.inspection.exception.DuplicateNameException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateName(
+            com.example.kafkaviz.inspection.exception.DuplicateNameException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(40903, ex.getMessage()));
+    }
+
+    // ---- 巡检:告警已确认(重复 ack) ----
+    @ExceptionHandler(com.example.kafkaviz.inspection.exception.AlreadyAcknowledgedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAlreadyAcknowledged(
+            com.example.kafkaviz.inspection.exception.AlreadyAcknowledgedException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(40904, ex.getMessage()));
+    }
+
+    // ---- 巡检:执行错误(采集异常等) ----
+    @ExceptionHandler(com.example.kafkaviz.inspection.exception.InspectionExecutionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInspectionExecution(
+            com.example.kafkaviz.inspection.exception.InspectionExecutionException ex) {
+        log.error("Inspection execution failed", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error(50004, ex.getMessage()));
+    }
+
     // ---- 兜底 ----
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex) {

@@ -65,6 +65,33 @@ cluster:
   # 空闲回收:超过该分钟数没有任何业务访问的连接会被 close,下次请求重建。
   idle-evict-minutes: 30
 
+inspection:
+  # 定时巡检总开关。false 时不注册 ticker / 启动对账 / 三个巡检控制器
+  #(回归"纯按需浏览"的轻量模式);已落库的规则与告警不受影响,重新打开即恢复调度。
+  enabled: true
+  scheduler:
+    # ticker 轮询周期。走 (enabled, next_fire_at) 索引扫到期规则,1s 一次的开销可忽略。
+    tick-ms: 1000
+    # Cron 最小触发间隔(秒)。低于此值的规则在创建/更新时被拒(40005)——
+    # 防误操作把全量 describeTopics/describeLogDirs 打向集群。
+    min-interval-seconds: 30
+  sample:
+    # 每个 (rule, scope) 保留 max(window_count) + buffer 条采样。
+    retention-buffer: 5
+  # 采集评估线程池:独立于 kafkaOpsExecutor(后者被占满会让用户请求吃 50302)。
+  executor:
+    core-pool-size: 2
+    max-pool-size: 4
+    queue-capacity: 128
+  alert:
+    # 告警发送线程池:与采集池分开,慢通道(HTTP/SMTP)不拖慢评估。
+    executor:
+      core-pool-size: 2
+      max-pool-size: 4
+      queue-capacity: 128
+    # 单通道发送超时(Webhook / IM / SMTP 共用)。
+    send-timeout-ms: 5000
+
 archive:
   # 全局归档开关:false 时所有集群都不启动归档器(已落库的归档仍可查询)。
   # 集成测试基建设为 false —— 归档器是常驻后台消费者,会给共享上下文的断言引入时序噪声。
