@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "description": "Multi-cluster Kafka visualization and management tool (Vue renderer + Electron desktop shell)",
+  "homepage": "https://github.com/wssc555/kafkaVisual",
   "author": "Kafka Visualizer",
   "type": "module",
   "main": "dist-electron/main.cjs",
