@@ -9,6 +9,9 @@
 # - mac 固定 arm64；win/linux 固定 x64 —— 与 CI 的 jlink runtime 架构一致。
 appId: com.kafkaviz.frontend
 productName: Kafka Visualizer
+# fpm 目标（deb/rpm）硬性要求：缺该字段会在构建 deb 阶段直接报
+# "Please specify project homepage"（AppImage 不受影响，故报错出现在 deb 步骤）
+homepage: https://github.com/wssc555/kafkaVisual
 copyright: Copyright © 2026 Kafka Visualizer
 
 directories:
