@@ -30,7 +30,7 @@ import java.util.List;
  * <p><b>为什么本类不带 {@code @ConditionalOnProperty}</b>(与 ticker / 控制器不同):
  * 集成测试上下文注入了 {@code inspection.enabled=false}(避免常驻 ticker 污染
  * 共享上下文),而"重启续跑"用例必须直接调用 {@link #reconcile()} —— 条件注册
- * 会让测试上下文里根本没有这个 Bean。改为无条件注册 + {@link #run} 内检查开关:
+ * 会让测试上下文里根本没有这个 Bean。故无条件注册 + {@link #run} 内检查开关:
  * 开关关闭时启动对账直接空转,行为与"不注册"等价。补评走
  * {@code RuleEngine#evaluate(InspectionRule)},与 ticker 共用 in-flight 守卫,
  * 不会和首轮 tick 并发重评同一条规则。

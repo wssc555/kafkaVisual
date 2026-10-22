@@ -220,7 +220,7 @@ export function formFromSummary(cl: ClusterSummary): ClusterAuthForm {
 // ---------------------------------------------------------------
 
 /**
- * 派生 {@code security.protocol} / {@code sasl.mechanism}（镜像后端 §4.1.2）。
+ * 派生 {@code security.protocol} / {@code sasl.mechanism}（镜像后端派生逻辑）。
  *
  * 注意 NONE 且未开 TLS 时协议为空串而非 `PLAINTEXT` —— 这是后端刻意保留的
  * 历史约定（"空 = 无认证"），前端提示文案不应写成 PLAINTEXT。

@@ -100,7 +100,6 @@ public class MessageService {
             consumer.seek(tp, startOffset);
 
             // 已读到的最大 offset:追平 topicEndOffset 即退出,不必再空转一轮 poll 等满 pollTimeout
-            // (翻到分区最后一页时原先固定多 ~1s 尾延迟)
             long lastReadOffset = startOffset - 1;
             while (records.size() < count) {
                 if (lastReadOffset + 1 >= topicEndOffset) {

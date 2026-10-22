@@ -2,15 +2,24 @@
   "name": "kafka-visualizer-frontend",
   "private": true,
   "version": "1.0.0",
+  "description": "Multi-cluster Kafka visualization and management tool (Vue renderer + Electron desktop shell)",
+  "author": "Kafka Visualizer",
   "type": "module",
+  "main": "dist-electron/main.cjs",
   "packageManager": "pnpm@12.5.1",
   "scripts": {
-    "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "dev": "node scripts/dev-desktop.mjs",
+    "dev:web": "vite",
+    "build:electron": "node scripts/build-electron.mjs",
+    "build": "vue-tsc --noEmit && tsc -p tsconfig.electron.json && vite build && node scripts/build-electron.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "tauri": "tauri"
+    "start": "electron .",
+    "dist": "pnpm build && electron-builder",
+    "dist:win": "pnpm build && electron-builder --win --x64",
+    "dist:mac": "pnpm build && electron-builder --mac --arm64",
+    "dist:linux": "pnpm build && electron-builder --linux --x64"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -21,9 +30,12 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.12.0",
+    "@types/node": "^24.9.0",
     "@vitejs/plugin-vue": "^5.2.4",
     "@vue/test-utils": "^2.5.1",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
     "jsdom": "^29.1.1",
     "typescript": "^5.9.3",
     "vite": "^6.4.3",

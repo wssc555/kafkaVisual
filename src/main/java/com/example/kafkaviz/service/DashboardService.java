@@ -81,7 +81,7 @@ public class DashboardService {
                 () -> KafkaFutures.await(admin.listConsumerGroups().all(), timeoutMs, "listConsumerGroups").size());
 
         // 2) logDirs 依赖 broker 列表:cluster 一回来就续发,与 topics/groups 重叠执行。
-        //    复用已拿到的 brokerIds,消除原先 describeLogDirs 内部的第二次 describeCluster。
+        //    复用已拿到的 brokerIds,避免 describeLogDirs 内部的第二次 describeCluster。
         ClusterInfo info = KafkaFutures.join(clusterFuture);
         List<Integer> brokerIds = info.getBrokers().stream()
                 .map(ClusterInfo.BrokerInfo::getId)

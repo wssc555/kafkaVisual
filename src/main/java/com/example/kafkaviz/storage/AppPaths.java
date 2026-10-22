@@ -24,7 +24,7 @@ import java.util.List;
  *
  * <p>路径来源(按优先级):
  * <ol>
- *   <li>命令行选项 {@code --app.db-path=<dir>}(Tauri sidecar 传 OS app-data 目录);</li>
+ *   <li>命令行选项 {@code --app.db-path=<dir>}(Electron sidecar 传 OS app-data 目录);</li>
  *   <li>Spring Environment 属性 {@code app.db-path}(命令行选项其实也会进 Environment,
  *       但测试用 {@code @DynamicPropertySource} 注入时<b>只</b>走这条路 ——
  *       动态属性不会出现在 {@link ApplicationArguments} 里,只认命令行会让

@@ -1,2 +1,11 @@
+# pnpm 12 默认不跑依赖的 postinstall，白名单在此声明（package.json 的 pnpm 字段不生效）。
+# electron 的 postinstall 负责下载平台二进制，漏掉会导致 `pnpm dev` / `electron .` 报
+# “无法定位 Electron 可执行文件”。
 allowBuilds:
   esbuild: true
+  electron: true
+  # electron-builder 的 Squirrel 目标依赖（本项目不用 Squirrel，但 pnpm 12 对
+  # 「存在未批准的构建脚本」会直接报 ERR_PNPM_IGNORED_BUILDS，必须显式放行）
+  electron-winstaller: true
+minimumReleaseAgeExclude:
+  - electron@45.0.0

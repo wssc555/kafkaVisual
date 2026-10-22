@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * 定时巡检配置({@code inspection.*})。
  *
- * <p>七项配置(计划 §10)。注意 {@code inspection.enabled} <b>不在这里</b> ——
+ * <p>七项配置。注意 {@code inspection.enabled} <b>不在这里</b> ——
  * 它只被 {@code @ConditionalOnProperty} 从 Environment 直接消费(决定 ticker /
  * reconciler / 三个控制器是否注册),绑成字段反而会让"关掉开关但 Bean 还在"的
  * 组合有可能被写出来。

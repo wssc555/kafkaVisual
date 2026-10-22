@@ -1,0 +1,99 @@
+# electron-builder 打包配置。
+#
+# 关键约束：
+# - appId 影响 bundle identifier / AppUserModelID / desktop 文件，**不决定数据目录**；
+#   数据目录由主进程 `app.setName('com.kafkaviz.frontend')` 决定（见 electron/main.ts）。
+# - extraResources 把 sidecar 放到 `<安装目录>/resources/app.jar` 与 `resources/runtime/`，
+#   主进程按 process.resourcesPath + '/app.jar' 探测。
+# - `dist/**` 解包出 asar（asarUnpack）：静态服务器用 fs 逐个读文件，避免 asar 路径语义差异。
+# - mac 固定 arm64；win/linux 固定 x64 —— 与 CI 的 jlink runtime 架构一致。
+appId: com.kafkaviz.frontend
+productName: Kafka Visualizer
+copyright: Copyright © 2026 Kafka Visualizer
+
+directories:
+  buildResources: build
+  output: release
+
+# 主进程/preload 已由 esbuild 打成独立 CJS（只 require('electron')），
+# 渲染层产物在 dist/ —— 运行期不需要 node_modules，排除掉可显著缩小安装包。
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+  - '!node_modules/**/*'
+
+# sidecar 产物由 CI/本地脚本准备到仓库级 build/resources/（不进 git）
+extraResources:
+  - from: ../build/resources/app.jar
+    to: app.jar
+  - from: ../build/resources/runtime
+    to: runtime
+
+asar: true
+asarUnpack:
+  - dist/**/*
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: msi
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Kafka Visualizer
+  artifactName: kafka-visualizer-${version}-windows-${arch}-setup.${ext}
+
+msi:
+  oneClick: false
+  perMachine: false
+  artifactName: kafka-visualizer-${version}-windows-${arch}.${ext}
+
+portable:
+  artifactName: kafka-visualizer-${version}-windows-${arch}-portable.${ext}
+
+mac:
+  icon: build/icon.icns
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - arm64
+
+dmg:
+  artifactName: kafka-visualizer-${version}-macos-${arch}.${ext}
+
+linux:
+  icon: build/icon.png
+  category: Development
+  maintainer: Kafka Visualizer
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+    - target: rpm
+      arch:
+        - x64
+
+appImage:
+  artifactName: kafka-visualizer-${version}-linux-${arch}.${ext}
+
+deb:
+  artifactName: kafka-visualizer-${version}-linux-${arch}.${ext}
+
+rpm:
+  artifactName: kafka-visualizer-${version}-linux-${arch}.${ext}

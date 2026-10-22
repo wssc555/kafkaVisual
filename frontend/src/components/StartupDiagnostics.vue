@@ -28,6 +28,7 @@
 <script setup lang="ts">
 import {nextTick, onBeforeUnmount, onMounted, ref} from 'vue'
 import {useI18n} from 'vue-i18n'
+import type {ElectronAPI} from '../../electron/api-types'
 import {bootLogs} from '../composables/bootLog'
 
 const {t} = useI18n()
@@ -43,11 +44,11 @@ let pollTimer: number | null = null
 let clockTimer: number | null = null
 
 const refreshBackend = async () => {
-  // 浏览器/开发模式无 __TAURI_INTERNALS__,面板根本不会渲染(ready 恒 true),此处双保险
-  const tauri = (globalThis as unknown as {__TAURI_INTERNALS__?: {invoke?: (cmd: string) => Promise<unknown>}}).__TAURI_INTERNALS__
-  if (!tauri || typeof tauri.invoke !== 'function') return
+  // 浏览器/开发模式无 electronAPI,面板根本不会渲染(ready 恒 true),此处双保险
+  const bridge = (globalThis as unknown as {electronAPI?: ElectronAPI}).electronAPI
+  if (!bridge || typeof bridge.readBackendLog !== 'function') return
   try {
-    const raw = await tauri.invoke('read_backend_log')
+    const raw = await bridge.readBackendLog()
     if (Array.isArray(raw)) {
       const lines = raw.map(String)
       tailTruncated.value = lines.length >= TAIL_LINES

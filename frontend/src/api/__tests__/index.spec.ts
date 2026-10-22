@@ -334,7 +334,7 @@ describe('Topic API (TC-FE-TOP-*)', () => {
     expect(result).toEqual(body)
   })
 
-  // TC-FE-TOP-004（F10 修复后语义反转：路径参数统一 encodeURIComponent）
+  // TC-FE-TOP-004（路径参数统一 encodeURIComponent）
   it('TC-FE-TOP-004 getTopicDetail encodes special characters in path segment', async () => {
     mockGet.mockResolvedValue({ code: 0, msg: 'ok', data: {} })
 
@@ -923,7 +923,7 @@ describe('Dashboard / offsets / configs API (TC-FE-NEW-*)', () => {
     })
   })
 
-  // TC-FE-NEW-011c（F9 修复后带 {params: undefined} 调用，axios 会把 undefined params 省略成无 query）
+  // TC-FE-NEW-011c（{params: undefined} 时 axios 把 undefined params 省略成无 query）
   it('TC-FE-NEW-011c getLogDirsSummary defaults to no query params', async () => {
     const body = { code: 0, msg: 'ok', data: [] }
     mockGet.mockResolvedValue(body)
@@ -937,7 +937,7 @@ describe('Dashboard / offsets / configs API (TC-FE-NEW-*)', () => {
     expect(result).toEqual(body)
   })
 
-  // TC-FE-NEW-011d（F9：透传 brokerId / includeInternal，与规范 §3.6 对齐）
+  // 透传 brokerId / includeInternal
   it('TC-FE-NEW-011d getLogDirsSummary forwards brokerId/includeInternal filters', async () => {
     mockGet.mockResolvedValue({ code: 0, msg: 'ok', data: [] })
 

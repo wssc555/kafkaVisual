@@ -13,7 +13,7 @@ import java.util.List;
 /**
  * {@code condition_json} → {@link RuleDefinition}。
  *
- * <p>DSL 形态(计划 §5.1):
+ * <p>DSL 形态:
  * <pre>{@code
  * {
  *   "combinator": "AND",

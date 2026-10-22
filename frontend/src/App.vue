@@ -29,16 +29,23 @@
             「集群」下拉菜单(默认收起):展开后仅「消费组」一个子项。
             点击标题仍跳转 /cluster(原菜单项行为保留),展开/收起由 el-sub-menu 原生处理;
             /cluster 路由下标题手动高亮 —— 它不再是 menu-item,没有原生 is-active 态。
+            标题槽必须保持 <el-icon> + <span> 平级:EP 折叠态会把标题的直接子 span 压成
+            0×0 + visibility:hidden,图标若包在 span 里会被连带隐藏(收起后图标不可见)。
+            点击态同时挂图标和文字 —— 折叠态文字被隐藏,只剩图标可点。
           -->
           <el-sub-menu index="cluster-nav">
             <template #title>
-              <span
+              <el-icon
                 :class="{ 'cluster-title--active': route.path === '/cluster' }"
-                class="cluster-title"
                 @click="goClusterPage"
               >
-                <el-icon><Monitor /></el-icon>
-                <span>{{ t('app.menu.cluster') }}</span>
+                <Monitor />
+              </el-icon>
+              <span
+                :class="{ 'cluster-title--active': route.path === '/cluster' }"
+                @click="goClusterPage"
+              >
+                {{ t('app.menu.cluster') }}
               </span>
             </template>
             <el-menu-item index="/consumer-groups">
@@ -60,17 +67,21 @@
             「巡检」下拉菜单(默认收起):概览 / 规则 / 告警通道 / 告警中心。
             与「集群」下拉同款处理:点击标题跳 /inspection,展开由 el-sub-menu 原生处理;
             /inspection 与 /inspection/rules 路由下标题手动高亮 —— 它不是 menu-item,
-            没有原生 is-active 态。
+            没有原生 is-active 态。标题槽同为 <el-icon> + <span> 平级(折叠态图标可见性)。
           -->
           <el-sub-menu index="inspection-nav">
             <template #title>
-              <span
+              <el-icon
                 :class="{ 'cluster-title--active': isInspectionActive }"
-                class="cluster-title"
                 @click="goInspectionOverview"
               >
-                <el-icon><Bell /></el-icon>
-                <span>{{ t('inspection.menu.inspection') }}</span>
+                <Bell />
+              </el-icon>
+              <span
+                :class="{ 'cluster-title--active': isInspectionActive }"
+                @click="goInspectionOverview"
+              >
+                {{ t('inspection.menu.inspection') }}
               </span>
             </template>
             <el-menu-item index="/inspection">
@@ -98,15 +109,15 @@
             「设置」下拉菜单(默认收起):「数据源设置」一个子项。
             点击标题仅展开/收起,不导航;/settings 路由下子项原生高亮,
             标题按菜单激活色手动补高亮(它不是 menu-item,没有原生 is-active 态)。
+            标题槽同为 <el-icon> + <span> 平级(折叠态图标可见性)。
           -->
           <el-sub-menu index="settings-nav">
             <template #title>
-              <span
-                :class="{ 'cluster-title--active': isSettingsActive }"
-                class="cluster-title"
-              >
-                <el-icon><Tools /></el-icon>
-                <span>{{ t('app.menu.settings') }}</span>
+              <el-icon :class="{ 'cluster-title--active': isSettingsActive }">
+                <Tools />
+              </el-icon>
+              <span :class="{ 'cluster-title--active': isSettingsActive }">
+                {{ t('app.menu.settings') }}
               </span>
             </template>
             <el-menu-item index="/settings">
@@ -555,11 +566,8 @@ body {
   border-radius: 50%;
   flex-shrink: 0;
 }
-/* 「集群」下拉标题:/cluster 路由下按菜单激活色高亮(标题不是 menu-item,无原生 is-active) */
-.cluster-title {
-  display: inline-flex;
-  align-items: center;
-}
+/* 「集群/巡检/设置」下拉标题:/cluster、/inspection*、/settings 路由下按菜单激活色
+   高亮图标与文字(标题不是 menu-item,无原生 is-active 态) */
 .cluster-title--active {
   color: var(--el-menu-active-color, var(--el-color-primary));
 }

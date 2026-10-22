@@ -2,7 +2,7 @@
  * 壳层文案：应用框架（App.vue 侧栏菜单/顶栏）、main.ts 启动错误弹框、
  * NotFound 404 页、FirstRunGuide 首次启动引导、StartupDiagnostics 面板静态文案。
  *
- * 注意：StartupDiagnostics 面板里的 bootLog 事件行为开发者诊断日志，保持中文不入包（评估文档 §2.2）。
+ * 注意：StartupDiagnostics 面板里的 bootLog 事件行为开发者诊断日志，保持中文不入包。
  */
 export const zh = {
   menu: {

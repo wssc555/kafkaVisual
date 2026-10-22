@@ -178,7 +178,7 @@ import EditTopicConfigsDialog from '../components/EditTopicConfigsDialog.vue'
 import {injectGlobalState} from '../composables/useGlobalState'
 import {useResponsive} from '../composables/useResponsive'
 
-// 双模模式感知：KRaft / ZooKeeper 显示对应副文案(计划 §4.2.5/§7.1)
+// 双模模式感知：KRaft / ZooKeeper 显示对应副文案
 const {clusterMode} = injectGlobalState()
 const {t} = useI18n()
 // 多集群:所有元数据端点挂集群段;窄档隐藏次要素养列

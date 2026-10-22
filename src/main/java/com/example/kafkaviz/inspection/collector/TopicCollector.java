@@ -115,7 +115,7 @@ public class TopicCollector implements MetricCollector {
      *
      * <p>两次 listOffsets(earliest/latest)才能算"现存消息数",但目录语义
      * ({@code message_count_total})是"该 topic 消息总量",故只取 endOffset 之和,
-     * 与计划 §5.2 的口径一致 —— 少一路 RPC,且不受 retention 清理造成的
+     * 与目录字段口径一致 —— 少一路 RPC,且不受 retention 清理造成的
      * beginningOffset 前移影响(那个量不是"总量")。
      */
     private Map<String, Long> fetchMessageCounts(AdminClient admin, Map<String, TopicDescription> descs)

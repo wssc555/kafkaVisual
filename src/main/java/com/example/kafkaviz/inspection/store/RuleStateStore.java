@@ -15,7 +15,7 @@ import java.util.Optional;
 /**
  * {@code rule_state} 读写 —— 状态去重的落地点。
  *
- * <p>写放大控制(计划 §5.3):
+ * <p>写放大控制:
  * <ul>
  *   <li>状态<b>转移</b>才写行({@link #markFiring} / {@link #markRecovered});</li>
  *   <li>持续 FIRING / 持续 OK 只走 {@link #touchEvaluated},且由调用方按分钟节流。</li>

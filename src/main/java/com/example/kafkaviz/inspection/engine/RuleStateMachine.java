@@ -18,7 +18,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * (rule, scope) 状态机 —— 告警去重的落点(计划 §7.1)。
+ * (rule, scope) 状态机 —— 告警去重的落点。
  *
  * <table border="1">
  *   <tr><th>当前</th><th>本轮 fired</th><th>动作</th></tr>

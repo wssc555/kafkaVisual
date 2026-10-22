@@ -12,7 +12,7 @@ vi.mock('element-plus', () => ({
 
 const confirmMock = vi.mocked(ElMessageBox.confirm)
 
-/** 规范 §6.1：后端 40001 的原始文案（auto.offset.reset=none 下 seek 越界） */
+/** 后端 40001 的原始文案（auto.offset.reset=none 下 seek 越界） */
 const OUT_OF_RANGE_42 =
   'Offset 999 is out of range for topic-a-0, earliest available offset is 42'
 

@@ -9,7 +9,7 @@ import {computed, type ComputedRef, ref, type Ref} from 'vue'
  * | mid    | 1024–1439         | 默认折叠 64px      | 卡片 2–3 列 / 次要列收起   |
  * | narrow | < 1024            | 覆盖式抽屉         | 卡片 1–2 列 / 横向滚动兜底 |
  *
- * Tauri 窗口最小尺寸 960×640,窄档实际窗口范围 960–1023。
+ * 桌面壳窗口最小尺寸 960×640,窄档实际窗口范围 960–1023。
  * 模块级 ref = App 级单例:listener 只注册一次,全组件共享同一份 tier。
  */
 export type ResponsiveTier = 'wide' | 'mid' | 'narrow'

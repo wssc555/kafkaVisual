@@ -39,7 +39,7 @@ public class InspectionExecutorConfig {
             thread.setDaemon(true);
             return thread;
         };
-        // 计划 §10 口径:core=2 / max=4 / queue=128。注意 ThreadPoolExecutor 的扩容规则:
+        // 口径:core=2 / max=4 / queue=128。注意 ThreadPoolExecutor 的扩容规则:
         // 只有队列满之后才会超过 core 扩到 maximum —— 有界队列在这里的角色是背压
         //(积压即拒绝 → 派发侧记 warn 跳过本轮),而非"用满 4 条线程"。
         int core = Math.max(1, config.getCorePoolSize());

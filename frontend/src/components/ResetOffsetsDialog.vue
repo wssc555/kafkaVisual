@@ -118,7 +118,7 @@ const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const errorMsg = ref('')
 const dateValue = ref<Date | null>(null)
-/** Topic 下拉候选(计划 §4.2.4「topic 下拉」)；allow-create 允许手输未列出 topic */
+/** Topic 下拉候选；allow-create 允许手输未列出 topic */
 const topics = ref<string[]>([])
 
 const form = reactive<{

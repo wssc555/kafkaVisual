@@ -1,4 +1,5 @@
 import axios from 'axios'
+import type {ElectronAPI} from '../../electron/api-types'
 import {bootLog} from '../composables/bootLog'
 import {i18n} from '../i18n'
 
@@ -8,45 +9,69 @@ const api = axios.create({
 })
 
 /**
- * Tauri 桌面模式 baseURL 握手。
+ * 取 Electron preload 注入的桥接对象。
+ * 用 globalThis 而非 window：vitest（node 环境）下没有 window，直接访问会 ReferenceError。
+ */
+const getElectronBridge = (): ElectronAPI | undefined => {
+  const bridge = (globalThis as unknown as { electronAPI?: ElectronAPI }).electronAPI
+  return bridge && typeof bridge.backendPort === 'function' ? bridge : undefined
+}
+
+const errorText = (e: unknown): string =>
+  e instanceof Error ? e.message : String(e)
+
+/**
+ * Electron 桌面模式 baseURL 握手。
  *
- * - 浏览器 / vite dev：维持默认 '/api'（vite proxy → 8080），返回 []；
- * - Tauri：轮询 `invoke('backend_port')` 拿 sidecar 实际监听端口，
+ * - 浏览器 / vite dev：没有 `window.electronAPI`，维持默认 '/api'（vite proxy → 8080），返回 []；
+ * - Electron 开发态（未打包）：桥接存在但壳未拉起 sidecar，经 `environment()` 判定后
+ *   同样走 vite proxy（否则会白等 60s 握手超时）；
+ * - Electron 打包态：轮询 `backendPort()` 拿 sidecar 实际监听端口，
  *   把 baseURL 改指 `http://127.0.0.1:{port}/api`。
  *
- * 必须轮询：Spring Boot 从 spawn 到打印 PORT= 需要 5–30s，启动瞬间单次 invoke
- * 必然拿到 null（这正是首版「仪表盘空白」的根因——baseURL 永久落在 '/api'）。
+ * 必须轮询：Spring Boot 从 spawn 到打印 PORT= 需要 5–30s，启动瞬间单次调用
+ * 必然拿到 null（baseURL 停在 '/api' 时仪表盘始终空白）。
  * 拿到端口立即返回 []; 60s 超时说明 sidecar 起失败 —— 拉取壳侧收集的
- * startup_errors 一并返回,由调用方（main.ts）弹框展示,同时保持 '/api' 兜底挂载。
+ * startupErrors 一并返回,由调用方（main.ts）弹框展示,同时保持 '/api' 兜底挂载。
  *
  * @returns 启动期错误列表（空数组 = 一切正常）
  */
 export const initApiBaseUrl = async (): Promise<string[]> => {
-  // 用 globalThis 而非 window:vitest(node 环境)下没有 window,直接访问会 ReferenceError
-  const tauri = (globalThis as unknown as { __TAURI_INTERNALS__?: { invoke?: (cmd: string) => Promise<unknown> } }).__TAURI_INTERNALS__
-  if (!tauri || typeof tauri.invoke !== 'function') {
+  const bridge = getElectronBridge()
+  if (!bridge) {
     bootLog('浏览器/开发模式:跳过握手,走 vite proxy → 8080')
     return []
+  }
+  // Electron 开发态：dist 不走静态服务器、resources 为空，端口永远不会握手成功
+  try {
+    const env = await bridge.environment()
+    if (env.dev) {
+      bootLog('Electron 开发模式:未拉起 sidecar,走 vite proxy → 8080')
+      return []
+    }
+  } catch (e: unknown) {
+    // 环境探测失败不阻断握手（老壳没有该通道时按桌面态继续）
+    bootLog(`环境探测失败,按桌面态继续:${errorText(e)}`)
   }
   bootLog('桌面模式:开始轮询 sidecar 端口(最长 60s)')
   for (let attempt = 0; attempt < 120; attempt++) {
     try {
-      const port = Number(await tauri.invoke('backend_port'))
+      const port = Number(await bridge.backendPort())
       if (Number.isInteger(port) && port > 0 && port < 65536) {
         api.defaults.baseURL = `http://127.0.0.1:${port}/api`
         bootLog(`握手成功:baseURL = http://127.0.0.1:${port}/api`)
         return []
       }
-    } catch (e: any) {
-      bootLog(`第 ${attempt + 1} 次握手异常:${e?.message ?? e}(继续重试)`)
+    } catch (e: unknown) {
+      bootLog(`第 ${attempt + 1} 次握手异常:${errorText(e)}(继续重试)`)
     }
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
   bootLog('握手超时(60s):后端服务未就绪')
-  // 60s 超时:sidecar 没起来。拉取壳侧记录的启动错误(旧版壳无此 command 时兜底空数组)
+  // 60s 超时:sidecar 没起来。拉取壳侧记录的启动错误(壳无此通道时兜底空数组)
   let errors: string[] = []
   try {
-    const raw = await tauri.invoke('startup_errors')
+    const raw = await bridge.startupErrors()
     if (Array.isArray(raw)) errors = raw.map(String)
   } catch {
     // 忽略,走通用文案
@@ -415,7 +440,7 @@ export interface ClusterSummary {
  * POST /api/clusters 与 PUT /api/clusters/{id} 请求体。
  *
  * **秘密字段三态**（后端 ClusterUpsertRequest 契约，避免"没动某个框就把凭据清空"）。
- * 适用于 password 及全部新增秘密材料（client 证书/私钥/私钥口令/CA/clientSecret/JAAS）：
+ * 适用于 password 及全部扩展秘密材料（client 证书/私钥/私钥口令/CA/clientSecret/JAAS）：
  * - `undefined`（字段缺省）—— 保持库中原值；编辑时未修改的字段必须省略；
  * - `'******'` —— 同上（对打码哨兵的防御）；
  * - `''`（空串）—— 显式清空；
@@ -423,8 +448,8 @@ export interface ClusterSummary {
  *
  * `customProps` 略有不同：`undefined` = 不修改；`{}` = 清空；非空对象 = 整体替换。
  *
- * **securityProtocol / saslMechanism 的语义变化**：除 CUSTOM 外，它们由前端提交值
- * 降级为忽略项 —— 落库值由后端按 authType 派生（见 clusterForm.ts 的派生对照）。
+ * **securityProtocol / saslMechanism**：除 CUSTOM 外均为忽略项 —— 落库值由后端
+ * 按 authType 派生（见 clusterForm.ts 的派生对照）。
  */
 export interface ClusterUpsertPayload {
   name: string

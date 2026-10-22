@@ -249,9 +249,7 @@ public class ClusterArchiveService {
     /** 归档 topic 列表(含已删除标记与归档条数);离线集群可用。 */
     public List<ArchiveTopicSummary> listArchivedTopics(long clusterId) {
         ensureArchiveTable(clusterId);
-        // 按列名读取(与 toMessageRecord 同口径):此前的索引读取曾与摘要 SQL 的列序
-        // 错位 —— messageCount(第5列)读到 last_partition_count、真实条数进了
-        // lastPartitionCount,台账接口把分区数当成了归档条数。名字读取取消顺序契约。
+        // 按列名读取(与 toMessageRecord 同口径),不依赖 SQL 的列序。
         return jdbcTemplate.query(dialect.selectArchiveTopicSummarySql(clusterId), (rs, rowNum) -> {
             Integer partitionCount = rs.getInt("last_partition_count");
             if (rs.wasNull()) {

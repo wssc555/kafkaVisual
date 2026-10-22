@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 桌面(Tauri sidecar)模式端口握手。
+ * 桌面(Electron sidecar)模式端口握手。
  *
  * <p><b>协议</b>:Rust 父进程以 {@code --server.port=0 --announce-port} 拉起后端;
  * 内嵌 web server 绑定端口后往 <b>stdout</b> 打印一行 {@code PORT=<port>} 并立即 flush。
