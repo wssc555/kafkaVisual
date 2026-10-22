@@ -34,7 +34,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ids=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" --paginate \
-            -q '.artifacts[] | select(.name == "kafka-visualizer-linux-x64" and .expired == false) | .id')
+            -q '.artifacts[] | select((.name | startswith("kafka-visualizer-linux-x64")) and .expired == false) | .id')
           if [ -z "$ids" ]; then
             echo "no previous artifact, nothing to delete"
           else
@@ -129,15 +129,34 @@ jobs:
         run: |
           test -x frontend/release/linux-unpacked/resources/runtime/bin/java
 
-      - name: Upload artifacts (workflow_dispatch only)
+      # 只在手动触发时上传 artifact（tag 构建走 Release，避免重复占用配额）。
+      # 三种格式拆成 3 个独立 artifact：GitHub 下载 artifact 时会强制再套一层 zip，
+      # 合并上传的话下载包 ≈ 三个安装包之和；拆开后每个 artifact 只含一个文件，
+      # 且 AppImage(squashfs)/deb(xz)/rpm 本身已近极限压缩，下载体积 ≈ 文件本身，按需单独取用。
+      - name: Upload AppImage (workflow_dispatch only)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: kafka-visualizer-linux-x64
-          path: |
-            frontend/release/*.AppImage
-            frontend/release/*.deb
-            frontend/release/*.rpm
+          name: kafka-visualizer-linux-x64-appimage
+          path: frontend/release/*.AppImage
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload deb (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kafka-visualizer-linux-x64-deb
+          path: frontend/release/*.deb
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload rpm (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kafka-visualizer-linux-x64-rpm
+          path: frontend/release/*.rpm
           if-no-files-found: error
           retention-days: 14
 
