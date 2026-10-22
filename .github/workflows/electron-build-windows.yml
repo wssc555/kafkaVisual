@@ -1,0 +1,173 @@
+# Windows 安装包构建（nsis + msi + portable exe + 免安装 zip）。
+# 纯手动触发: workflow_dispatch 或 push tag v*。
+name: Electron Build (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  actions: write # 删除上一次运行的同名 artifact（滚动覆盖）
+
+env:
+  # 三平台均未签名:显式关闭签名证书自动发现，避免 electron-builder 在 CI 里找证书超时
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+jobs:
+  build-electron-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      # 优化: 禁用 Windows Defender 实时扫描，大幅提高磁盘 I/O 速度。
+      # 部分 runner 镜像会拒绝该设置——失败不应挡住构建，故 continue-on-error。
+      - name: Disable Windows Defender Realtime Monitoring
+        shell: pwsh
+        continue-on-error: true
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
+      - uses: actions/checkout@v4
+
+      # upload-artifact@v4 没有跨 run 的「覆盖」：同名 artifact 按运行各存一份。
+      # Electron 单产物比 Tauri 大约一个数量级，500MB 免费配额更容易击穿，
+      # 因此除了滚动删除，artifact 上传本身也只在 workflow_dispatch 时执行（见文末）。
+      - name: Delete previous artifact (rolling overwrite)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ids=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" --paginate \
+            -q '.artifacts[] | select(.name == "kafka-visualizer-windows-x64" and .expired == false) | .id')
+          if [ -z "$ids" ]; then
+            echo "no previous artifact, nothing to delete"
+          else
+            for id in $ids; do
+              gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+              echo "deleted artifact $id"
+            done
+          fi
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: 'maven'
+
+      # 版本由 frontend/package.json 的 packageManager 字段（pnpm@12.5.1）决定
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Build backend fat jar
+        # windows-latest 的 run 默认 shell 是 pwsh：PowerShell 会在第一个 "." 处把
+        # -Dmaven.test.skip=true 拆成 "-Dmaven" 和 ".test.skip=true" 两个参数，
+        # Maven 随即报 Unknown lifecycle phase ".test.skip=true" 构建失败；
+        # 单引号包裹可避免拆分（Linux/macOS 默认 bash，无此问题，故只改 Windows）。
+        # -Dmaven.test.skip=true 连测试代码一并跳过编译（打包产物不需要；-DskipTests 仍会编译 *IT.java）
+        run: mvn -B -T 1C '-Dmaven.test.skip=true' package
+
+      - name: Build jlink runtime
+        shell: bash
+        run: |
+          rm -rf jlink-runtime
+          jlink --no-header-files --no-man-pages --strip-debug --compress=zip-6 \
+            --add-modules java.se,jdk.unsupported,jdk.zipfs,jdk.charsets,jdk.localedata,jdk.crypto.ec,jdk.crypto.cryptoki \
+            --output jlink-runtime
+          head -3 jlink-runtime/release
+
+      # sidecar 布局 = <安装目录>/resources/{app.jar, runtime/}：
+      # electron-builder 的 extraResources 把这两个产物按原名放进 process.resourcesPath。
+      - name: Assemble sidecar resources (app.jar + runtime)
+        shell: bash
+        run: |
+          mkdir -p build/resources
+          cp target/kafka-visualizer-*.jar build/resources/app.jar
+          rm -rf build/resources/runtime
+          cp -r jlink-runtime build/resources/runtime
+          test -f build/resources/app.jar
+          test -f build/resources/runtime/bin/java.exe
+          ls -la build/resources
+
+      # electron-builder 每次运行都要从网络下载并解压 Electron 发行包（Windows 约 110MB）。
+      # 缓存两个目录：%LOCALAPPDATA%\electron\Cache（npm electron postinstall 与 electron-builder 共用）
+      # 和 %LOCALAPPDATA%\electron-builder\Cache（打包工具）。
+      # 必须放在 pnpm install 之前——electron 包的 postinstall 下载也要命中这份缓存。
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-${{ runner.os }}-
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      # vue-tsc（渲染层）+ tsc（主进程/preload）+ vite build + esbuild 主进程打包
+      - name: Build renderer and electron bundles
+        working-directory: frontend
+        run: pnpm build
+
+      - name: Package with electron-builder
+        working-directory: frontend
+        run: pnpm exec electron-builder --win --x64
+
+      # 打包后冒烟断言：确认 extraResources 没在拷贝时丢文件（mac/linux 有可执行位校验，Windows 无执行位概念，用存在性兜底）
+      - name: Verify sidecar resources inside win-unpacked
+        shell: bash
+        run: |
+          test -f frontend/release/win-unpacked/resources/app.jar
+          test -f frontend/release/win-unpacked/resources/runtime/bin/java.exe
+          ls frontend/release/win-unpacked/resources
+
+      # 免安装绿色版：win-unpacked 已是「exe + resources/」布局，直接压 zip 即可
+      # （解压后双击 Kafka Visualizer.exe 运行，无需安装）。
+      - name: Assemble portable package (no-install zip)
+        shell: pwsh
+        run: |
+          Compress-Archive -Path frontend/release/win-unpacked `
+            -DestinationPath kafka-visualizer-windows-portable.zip -Force
+          Get-ChildItem frontend/release | Select-Object Name, Length
+
+      # 只在手动触发时上传 artifact（tag 构建走 Release，避免重复占用配额）
+      - name: Upload artifacts (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kafka-visualizer-windows-x64
+          path: |
+            frontend/release/*.msi
+            frontend/release/*-setup.exe
+            frontend/release/*-portable.exe
+            kafka-visualizer-windows-portable.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish release (tag push only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false # 全自动：直接发布，无需手动点 Publish
+          generate_release_notes: true # 自动汇总自上个 tag 以来的变更作为发布说明
+          files: |
+            frontend/release/*.msi
+            frontend/release/*-setup.exe
+            frontend/release/*-portable.exe
+            kafka-visualizer-windows-portable.zip

@@ -1,0 +1,153 @@
+# Linux 安装包构建（AppImage + deb + rpm）。
+#
+# 触发（纯手动，无定时）
+name: Electron Build (Linux)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write # tag 触发时向 release 上传文件
+  actions: write # 删除上一次运行的同名 artifact（滚动覆盖）
+
+env:
+  # 未签名（Linux 无签名步骤），显式关闭证书自动发现保持一致行为
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+jobs:
+  build-electron-linux:
+    # ubuntu-22.04 已于 2026-09-17 进入弃用期（2027-04-17 彻底不可用，弃用期有 brownout 会直接失败）；
+    # 显式钉 24.04，不用 ubuntu-latest（2026-11 起会指向 26.04）
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Delete previous artifact (rolling overwrite)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ids=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" --paginate \
+            -q '.artifacts[] | select(.name == "kafka-visualizer-linux-x64" and .expired == false) | .id')
+          if [ -z "$ids" ]; then
+            echo "no previous artifact, nothing to delete"
+          else
+            for id in $ids; do
+              gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+              echo "deleted artifact $id"
+            done
+          fi
+
+      # rpm: rpm target 需要 rpmbuild；libfuse2: AppImage 相关工具依赖 FUSE
+      - name: Install packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends rpm libfuse2
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: 'maven'
+
+      # 版本由 frontend/package.json 的 packageManager 字段（pnpm@12.5.1）决定
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Build backend fat jar
+        # -Dmaven.test.skip=true 连测试代码一并跳过编译（打包产物不需要；-DskipTests 仍会编译 *IT.java）
+        run: mvn -B -T 1C -Dmaven.test.skip=true package
+
+      # 模块集说明（宁多勿缺，缺模块只会在用户机器运行时炸）：
+      #   java.se / jdk.unsupported(sun.misc.Unsafe) / jdk.crypto.ec(TLS 椭圆曲线) /
+      #   jdk.crypto.cryptoki / jdk.charsets / jdk.localedata / jdk.zipfs
+      # 不加 jdk.crypto.mscapi：Windows-only 模块在 Linux 的 jlink 里不存在，会直接报错。
+      - name: Build jlink runtime
+        run: |
+          rm -rf jlink-runtime
+          jlink --no-header-files --no-man-pages --strip-debug --compress=zip-6 \
+            --add-modules java.se,jdk.unsupported,jdk.zipfs,jdk.charsets,jdk.localedata,jdk.crypto.ec,jdk.crypto.cryptoki \
+            --output jlink-runtime
+          head -3 jlink-runtime/release
+
+      # extraResources 在 Unix 平台偶发丢失可执行位 → spawn 报 EACCES，这里显式补齐并断言
+      - name: Assemble sidecar resources (app.jar + runtime)
+        run: |
+          mkdir -p build/resources
+          cp target/kafka-visualizer-*.jar build/resources/app.jar
+          rm -rf build/resources/runtime
+          cp -r jlink-runtime build/resources/runtime
+          chmod +x build/resources/runtime/bin/java
+          test -f build/resources/app.jar
+          test -x build/resources/runtime/bin/java
+          ls -la build/resources
+
+      # electron-builder 每次运行都要从网络下载并解压 Electron 发行包（每平台 100MB+）。
+      # 缓存两个目录：~/.cache/electron（npm electron postinstall 与 electron-builder 共用同一缓存根）
+      # 和 ~/.cache/electron-builder（appimagetool 等打包工具）。
+      # 必须放在 pnpm install 之前——electron 包的 postinstall 下载也要命中这份缓存。
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: electron-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-${{ runner.os }}-
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build renderer and electron bundles
+        working-directory: frontend
+        run: pnpm build
+
+      - name: Package with electron-builder
+        working-directory: frontend
+        run: pnpm exec electron-builder --linux --x64
+
+      # 打包后再次确认解包目录里的 java 可执行位（extraResources 复制路径的最后一道保险）
+      - name: Verify java executable bit in linux-unpacked
+        run: |
+          test -x frontend/release/linux-unpacked/resources/runtime/bin/java
+
+      - name: Upload artifacts (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kafka-visualizer-linux-x64
+          path: |
+            frontend/release/*.AppImage
+            frontend/release/*.deb
+            frontend/release/*.rpm
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish release (tag push only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          generate_release_notes: true
+          files: |
+            frontend/release/*.AppImage
+            frontend/release/*.deb
+            frontend/release/*.rpm
